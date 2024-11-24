@@ -65,13 +65,16 @@ public class Model {
                     throw new RuntimeException("Creating person failed, no ID obtained.");
                 }
             }
-            
-            
-            
-            // CONTINUE
+            // Insert client
+            pstmtClient.setInt(1, personId);
+            pstmtClient.setTimestamp(2, userData.getRegistrationDate());
+            pstmtClient.executeUpdate();
 
-
-
+            // Insert card
+            pstmtCard.setDouble(1, cardData.getCredit());
+            pstmtCard.setString(2, cardData.getReference());
+            pstmtCard.setInt(3, personId);
+            pstmtCard.executeUpdate();
 
             conn.commit();
             if (pstmtUser != null)
@@ -107,14 +110,41 @@ public class Model {
          * @param orders Criteria for listing orders
          * @throws SQLException if database operation fails
          */
-        final String VALUE_CMD = " TO BE DONE";
-        // try(
-        // Connection conn =
-        // DriverManager.getConnection(UI.getInstance().getConnectionString());
-        // PreparedStatement pstmt1 = conn.prepareStatement(VALUE_CMD);
-        // ){
+        final String VALUE_CMD = """
+        SELECT ro.dtorder, ro.dtreplacement, ro.roccupation, s.latitude, s.longitude
+        FROM replacementorder ro
+        JOIN station s ON ro.station = s.id
+        WHERE ro.station = ? AND ro.dtorder BETWEEN ? AND ?
+        ORDER BY ro.dtorder;
+         """;
 
-        // }
+        try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
+        PreparedStatement pstmt = conn.prepareStatement(QUERY)) {
+
+         // Parse input parameters
+         int stationId = Integer.parseInt(orders[0]);
+         Timestamp startDate = Timestamp.valueOf(orders[1]);
+         Timestamp endDate = Timestamp.valueOf(orders[2]);
+
+         // Set query parameters
+         pstmt.setInt(1, stationId);
+          pstmt.setTimestamp(2, startDate);
+          pstmt.setTimestamp(3, endDate);
+
+            // Execute query and display results
+          try (ResultSet rs = pstmt.executeQuery()) {
+               if (!rs.isBeforeFirst()) { // Check if the result set is empty
+                   System.out.println("No replacement orders found for the specified criteria.");
+             } else {
+                  UI.printResults(rs);
+              }
+           }
+        } catch (SQLException e) {
+           e.printStackTrace();
+         throw new RuntimeException("Error while listing orders: " + e.getMessage());
+      } catch (IllegalArgumentException | ArrayIndexOutOfBoundsException e) {
+          System.out.println("Invalid input. Ensure the parameters are station ID, start date, and end date.");
+        }
     }
 
     
@@ -126,7 +156,34 @@ public class Model {
          * @param endDate End date for period
          * @throws SQLException if database operation fails
          */
-        // TO BE DONE
+        final String VALUE_CMD = """
+        SELECT ro.dtorder, ro.dtreplacement, ro.roccupation, s.latitude, s.longitude
+        FROM replacementorder ro
+        JOIN station s ON ro.station = s.id
+        WHERE ro.station = ? AND ro.dtorder BETWEEN ? AND ?
+        ORDER BY ro.dtorder;
+    """;
+
+    try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
+         PreparedStatement pstmt = conn.prepareStatement(VALUE_CMD)) {
+
+        // Modifying the parameters
+        pstmt.setInt(1, stationId);
+        pstmt.setTimestamp(2, startDate);
+        pstmt.setTimestamp(3, endDate);
+
+        // Run the query and get the results
+        try (ResultSet rs = pstmt.executeQuery()) {
+            if (!rs.isBeforeFirst()) { // Checks if the resultset is empty
+                System.out.println("No replacement orders found for the specified criteria.");
+            } else {
+                UI.printResults(rs); // Format and display the results
+            }
+        }
+    } catch (SQLException e) {
+        e.printStackTrace();
+        throw new RuntimeException("Error while listing replacement orders: " + e.getMessage());
+    }
         System.out.print("EMPTY")
     }
 

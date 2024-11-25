@@ -28,7 +28,7 @@ public class Model {
     }
 
     static void addUser(User userData, Card cardData) {
-        // PARCIALLY IMPLEMENTED
+        // PARCIALLY IMPLEMENTED / IMPLEMENTED!
         /**
          * Adds a new user with associated card to the database
          * 
@@ -104,7 +104,7 @@ public class Model {
      **/
 
     static void listOrders(String[] orders) {
-        /**
+        /** IMPLEMENTED!
          * Lists orders based on specified criteria
          * 
          * @param orders Criteria for listing orders
@@ -149,7 +149,7 @@ public class Model {
 
     
     public static void listReplacementOrders(int stationId, Timestamp startDate, Timestamp endDate) throws SQLException {
-        /**
+        /** IMPLEMENTED!
          * Lists replacement orders for a specific station in a given time period
          * @param stationId Station ID
          * @param startDate Start date for period
@@ -193,7 +193,27 @@ public class Model {
          * @param values Array containing [operation, name, station, scooter]
          * @throws SQLException if database operation fails
          */
-        // TO BE DONE  
+        try {
+            // Parse inputs
+            String operation = values[0].toLowerCase();
+            int clientId = Integer.parseInt(values[1]);
+            int stationId = Integer.parseInt(values[2]);
+            int scooterId = Integer.parseInt(values[3]);
+    
+            // Call appropriate method based on the operation
+            if ("start".equals(operation)) {
+                startTravel(clientId, scooterId, stationId);
+            } else if ("stop".equals(operation)) {
+                stopTravel(clientId, scooterId, stationId);
+            } else {
+                throw new IllegalArgumentException("Invalid operation. Use 'start' or 'stop'.");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error processing travel: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            System.out.println("Invalid input: " + e.getMessage());
+        }
     }
     
     public static int getClientId(String name) throws SQLException {
@@ -203,7 +223,33 @@ public class Model {
          * @return client ID or -1 if not found
          * @throws SQLException if database operation fails
          */
-        
+         final String QUERY = """
+        SELECT c.person
+        FROM client c
+        JOIN person p ON c.person = p.id
+        WHERE p.name = ?
+    """;
+
+    try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
+         PreparedStatement pstmt = conn.prepareStatement(QUERY)) {
+
+        // Configure the query parameter
+        pstmt.setString(1, name);
+
+        // Executar a consulta
+        try (ResultSet rs = pstmt.executeQuery()) {
+            if (rs.next()) {
+                // Return the customer ID found
+                return rs.getInt("person");
+            } else {
+                // Client not found
+                return -1;
+            }
+        }
+    } catch (SQLException e) {
+        e.printStackTrace();
+        throw new RuntimeException("Error retrieving client ID: " + e.getMessage());
+    }
     }
 
     public static void startTravel(int clientId, int scooterId, int stationId) throws SQLException {
@@ -214,7 +260,36 @@ public class Model {
          * @param stationId Station ID
          * @throws SQLException if database operation fails
          */
-        System.out.print("EMPTY")
+        final String UPDATE_DOCK = "UPDATE dock SET state = 'occupy' WHERE scooter = ? AND station = ? AND state = 'free'";
+    final String INSERT_TRAVEL = "INSERT INTO travel (dtinitial, client, scooter, stinitial) VALUES (CURRENT_TIMESTAMP, ?, ?, ?)";
+
+    try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
+         PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
+         PreparedStatement pstmtTravel = conn.prepareStatement(INSERT_TRAVEL)) {
+
+        conn.setAutoCommit(false); // Beginning of the transaction
+
+        // Update Dock State
+        pstmtDock.setInt(1, scooterId);
+        pstmtDock.setInt(2, stationId);
+        int rowsUpdated = pstmtDock.executeUpdate();
+        if (rowsUpdated == 0) {
+            throw new SQLException("No free dock available for the specified scooter.");
+        }
+
+        // Insert the new trip
+        pstmtTravel.setInt(1, clientId);
+        pstmtTravel.setInt(2, scooterId);
+        pstmtTravel.setInt(3, stationId);
+        pstmtTravel.executeUpdate();
+
+        conn.commit(); // Confirm transaction
+        System.out.println("Travel started successfully.");
+    } catch (SQLException e) {
+        e.printStackTrace();
+        throw new RuntimeException("Error starting travel: " + e.getMessage());
+    }
+        //System.out.print("EMPTY")
     }
 
     
@@ -226,7 +301,69 @@ public class Model {
          * @param stationId Destination station ID
          * @throws SQLException if database operation fails
          */
-        System.out.print("EMPTY")
+    final String UPDATE_DOCK = "UPDATE dock SET state = 'free' WHERE scooter = ? AND station = ? AND state = 'occupy'";
+    final String UPDATE_TRAVEL = "UPDATE travel SET dtfinal = CURRENT_TIMESTAMP, stfinal = ? WHERE client = ? AND scooter = ? AND dtfinal IS NULL";
+    final String CALCULATE_COST = """
+        SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - t.dtinitial)) / 60 * sc.usable AS cost
+        FROM travel t
+        JOIN servicecost sc ON TRUE
+        WHERE t.client = ? AND t.scooter = ? AND t.dtfinal IS NULL
+    """;
+    final String UPDATE_CARD_BALANCE = "UPDATE card SET credit = credit - ? WHERE client = ? AND credit >= ?";
+
+    try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
+         PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
+         PreparedStatement pstmtTravel = conn.prepareStatement(UPDATE_TRAVEL);
+         PreparedStatement pstmtCost = conn.prepareStatement(CALCULATE_COST);
+         PreparedStatement pstmtCard = conn.prepareStatement(UPDATE_CARD_BALANCE)) {
+
+        conn.setAutoCommit(false); // Beginning of the transaction
+
+        // Update the dock to release the three
+        pstmtDock.setInt(1, scooterId);
+        pstmtDock.setInt(2, stationId);
+        int rowsUpdated = pstmtDock.executeUpdate();
+        if (rowsUpdated == 0) {
+            throw new SQLException("No occupied dock found for the specified scooter.");
+        }
+
+        // Update the trip with the final station and the end time
+        pstmtTravel.setInt(1, stationId);
+        pstmtTravel.setInt(2, clientId);
+        pstmtTravel.setInt(3, scooterId);
+        rowsUpdated = pstmtTravel.executeUpdate();
+        if (rowsUpdated == 0) {
+            throw new SQLException("No ongoing travel found for the specified scooter and client.");
+        }
+
+        // Calculate the cost of travel
+        pstmtCost.setInt(1, clientId);
+        pstmtCost.setInt(2, scooterId);
+        double travelCost;
+        try (ResultSet rs = pstmtCost.executeQuery()) {
+            if (rs.next()) {
+                travelCost = rs.getDouble("cost");
+            } else {
+                throw new SQLException("Failed to calculate travel cost.");
+            }
+        }
+
+        // Update Customer Balance
+        pstmtCard.setDouble(1, travelCost);
+        pstmtCard.setInt(2, clientId);
+        pstmtCard.setDouble(3, travelCost);
+        rowsUpdated = pstmtCard.executeUpdate();
+        if (rowsUpdated == 0) {
+            throw new SQLException("Insufficient balance to complete the travel.");
+        }
+
+        conn.commit(); // Confirm transaction
+        System.out.printf("Travel ended successfully. Cost: %.2f%n", travelCost);
+    } catch (SQLException e) {
+        e.printStackTrace();
+        throw new RuntimeException("Error stopping travel: " + e.getMessage());
+    }
+        //System.out.print("EMPTY")
     }
 
     public static void updateDocks(/*FILL WITH PARAMETERS */) {

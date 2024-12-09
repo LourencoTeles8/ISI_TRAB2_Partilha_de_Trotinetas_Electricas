@@ -367,8 +367,23 @@ public class Model {
     }
 
     public static void updateDocks(/*FILL WITH PARAMETERS */) {
-        // TODO
         System.out.println("updateDocks()");
+        try {
+            String dockDetails = Model.inputData("Enter dock details (dock number, station ID, state, scooter ID):\n");
+            String[] details = dockDetails.split(",");
+            int dockNumber = Integer.parseInt(details[0]);
+            int stationId = Integer.parseInt(details[1]);
+            String state = details[2];
+            Integer scooterId = details.length > 3 ? Integer.parseInt(details[3]) : null;
+        
+            String query = "UPDATE DOCK SET state = ?, scooter = ? WHERE number = ? AND station = ?";
+            Model.executeUpdate(query, state, scooterId, dockNumber, stationId);
+            System.out.println("Dock updated successfully.");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            System.out.println("Error updating dock.");
+        }
+    }        
     }
 
     public static void userSatisfaction(/*FILL WITH PARAMETERS */) {

@@ -8,9 +8,9 @@ public class Restriction {
 
     // Method to get the restriction from the user
     public static String getRestriction() {
-        Scanner scanner = new Scanner(System.in);
-        System.out.println("Enter the restriction: ");
-        String restriction = scanner.nextLine();
-        return restriction;
+        try (Scanner scanner = new Scanner(System.in)){
+            System.out.println("Enter the restriction: ");
+            return scanner.nextLine();
+        }
     }
 }

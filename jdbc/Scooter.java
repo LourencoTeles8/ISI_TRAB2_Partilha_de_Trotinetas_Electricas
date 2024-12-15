@@ -18,6 +18,7 @@ class Scooter {
     public Scooter(double weight, double maxvelocity, int battery, ScooterModel model) {
         this.weight = weight;
         this.maxvelocity = maxvelocity;
+        this.battery = battery;
         this.model = model;
     }      
 
@@ -32,5 +33,5 @@ class Scooter {
 
     public ScooterModel getModel() { return model; }
 
-    public void setModelo(ScooterModel model) { this.model = model; }
+    public void setModel(ScooterModel model) { this.model = model; }
 }

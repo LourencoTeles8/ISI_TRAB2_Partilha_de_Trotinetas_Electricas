@@ -27,7 +27,7 @@ public class Model {
         return key.nextLine();
     }
 
-    static void addUser(User userData, Card cardData) {
+    static public void addUser(User userData, Card cardData) {
         // PARCIALLY IMPLEMENTED / IMPLEMENTED!
         /**
          * Adds a new user with associated card to the database
@@ -66,9 +66,9 @@ public class Model {
                 }
             }
             // Insert client
-            pstmtClient.setInt(1, personId);
-            pstmtClient.setTimestamp(2, userData.getRegistrationDate());
-            pstmtClient.executeUpdate();
+            pstmtPerson.setInt(1, personId);
+            pstmtPerson.setTimestamp(2, userData.getRegistrationDate());
+            pstmtPerson.executeUpdate();
 
             // Insert card
             pstmtCard.setDouble(1, cardData.getCredit());
@@ -184,7 +184,7 @@ public class Model {
         e.printStackTrace();
         throw new RuntimeException("Error while listing replacement orders: " + e.getMessage());
     }
-        System.out.print("EMPTY")
+        System.out.print("EMPTY");
     }
 
     public static void travel(String[] values){
@@ -384,15 +384,40 @@ public class Model {
             System.out.println("Error updating dock.");
         }
     }        
-    }
 
-    public static void userSatisfaction(/*FILL WITH PARAMETERS */) {
-        // TODO
+
+    public static void userSatisfaction(/*FILL WITH PARAMETERS */){
         System.out.println("userSatisfaction()");
+        try {
+            String satisfactionDetails = Model.inputData("Enter user satisfaction details (user ID, rating, comments):\n");
+            String[] details = satisfactionDetails.split(",");
+            int userId = Integer.parseInt(details[0]);
+            int rating = Integer.parseInt(details[1]);
+            String comments = details.length > 2 ? details[2] : "";
+    
+            String query = "INSERT INTO user_satisfaction (user_id, rating, comments) VALUES (?, ?, ?)";
+            Model.executeUpdate(query, userId, rating, comments);
+            System.out.println("User satisfaction recorded successfully.");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            System.out.println("Error recording user satisfaction.");
+        }
     }
 
-    public static void occupationStation(/*FILL WITH PARAMETERS */) {
-        // TODO
+    public static void occupationStation(/*FILL WITH PARAMETERS */){
         System.out.println("occupationStation()");
-    }    
+        try {
+            String stationDetails = Model.inputData("Enter station occupation details (station ID, occupation rate):\n");
+            String[] details = stationDetails.split(",");
+            int stationId = Integer.parseInt(details[0]);
+            double occupationRate = Double.parseDouble(details[1]);
+    
+            String query = "UPDATE station SET occupation_rate = ? WHERE id = ?";
+            Model.executeUpdate(query, occupationRate, stationId);
+            System.out.println("Station occupation updated successfully.");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            System.out.println("Error updating station occupation.");
+        }
+    }
 }

@@ -17,11 +17,11 @@ public class ScooterModel {
 
     public ScooterModel(String[] attr){
         this.designation = attr[1];
-        this.autonomy = Double.parseDouble(attr[2]);
+        this.autonomy = Integer.parseInt(attr[2]);
     } 
 
     // Getters and Setters specific to ElectricScooter
-    public double getDesignation() { return designation; }
+    public String getDesignation() { return designation; }
 
     public void setDesignation(String designation) { this.designation = designation; }
 

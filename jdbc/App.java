@@ -203,6 +203,7 @@ class UI {
             ex.printStackTrace();
             System.out.println("Error processing travel operation.");
         }
+    }
 
     private void updateDocks() {
         System.out.println("updateDocks()");
@@ -215,12 +216,13 @@ class UI {
             Integer scooterId = details.length > 3 ? Integer.parseInt(details[3]) : null;
     
             String query = "UPDATE DOCK SET state = ?, scooter = ? WHERE number = ? AND station = ?";
-            Model.executeUpdate(query, state, scooterId, dockNumber, stationId);
+            Model.updateDocks(query, state, scooterId, dockNumber, stationId);
             System.out.println("Dock updated successfully.");
         } catch (Exception ex) {
             ex.printStackTrace();
             System.out.println("Error updating dock.");
         }
+    }
 
     private void userSatisfaction() {
             System.out.println("userSatisfaction()");
@@ -232,7 +234,7 @@ class UI {
                 String comments = details.length > 2 ? details[2] : "";
         
                 String query = "INSERT INTO user_satisfaction (user_id, rating, comments) VALUES (?, ?, ?)";
-                Model.executeUpdate(query, userId, rating, comments);
+                Model.userSatisfaction(query, userId, rating, comments);
                 System.out.println("User satisfaction recorded successfully.");
             } catch (Exception ex) {
                 ex.printStackTrace();
@@ -249,7 +251,7 @@ class UI {
             double occupationRate = Double.parseDouble(details[1]);
     
             String query = "UPDATE station SET occupation_rate = ? WHERE id = ?";
-            Model.executeUpdate(query, occupationRate, stationId);
+            Model.occupationStation(query, occupationRate, stationId);
             System.out.println("Station occupation updated successfully.");
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -264,7 +266,8 @@ public class App {
         String url = String.format("%s?user=%s&password=%s&ssl=false", DatabaseProperties.getUrl(),
                 DatabaseProperties.getUser(), DatabaseProperties.getPassword());
 
-        UI.getInstance().setConnectionString(url);
-        UI.getInstance().Run();
+            UI.getInstance().setConnectionString(url);
+            UI.getInstance().Run();
+        }
     }
 }

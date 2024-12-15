@@ -116,36 +116,36 @@ public class Model {
         JOIN station s ON ro.station = s.id
         WHERE ro.station = ? AND ro.dtorder BETWEEN ? AND ?
         ORDER BY ro.dtorder;
-         """;
+        """;
 
         try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
-        PreparedStatement pstmt = conn.prepareStatement(QUERY)) {
+        PreparedStatement pstmt = conn.prepareStatement(QUERY/*Value_CMD??*/)) {
 
          // Parse input parameters
-         int stationId = Integer.parseInt(orders[0]);
-         Timestamp startDate = Timestamp.valueOf(orders[1]);
-         Timestamp endDate = Timestamp.valueOf(orders[2]);
+        int stationId = Integer.parseInt(orders[0]);
+        Timestamp startDate = Timestamp.valueOf(orders[1]);
+        Timestamp endDate = Timestamp.valueOf(orders[2]);
 
          // Set query parameters
-         pstmt.setInt(1, stationId);
-          pstmt.setTimestamp(2, startDate);
-          pstmt.setTimestamp(3, endDate);
+        pstmt.setInt(1, stationId);
+        pstmt.setTimestamp(2, startDate);
+        pstmt.setTimestamp(3, endDate);
 
             // Execute query and display results
-          try (ResultSet rs = pstmt.executeQuery()) {
-               if (!rs.isBeforeFirst()) { // Check if the result set is empty
-                   System.out.println("No replacement orders found for the specified criteria.");
-             } else {
-                  UI.printResults(rs);
-              }
-           }
-        } catch (SQLException e) {
-           e.printStackTrace();
-         throw new RuntimeException("Error while listing orders: " + e.getMessage());
-      } catch (IllegalArgumentException | ArrayIndexOutOfBoundsException e) {
-          System.out.println("Invalid input. Ensure the parameters are station ID, start date, and end date.");
+        try (ResultSet rs = pstmt.executeQuery()) {
+            if (!rs.isBeforeFirst()) { // Check if the result set is empty
+                System.out.println("No replacement orders found for the specified criteria.");
+            } else {
+                UI.printResults(rs);
+            }
         }
+    } catch (SQLException e) {
+        e.printStackTrace();
+        throw new RuntimeException("Error while listing orders: " + e.getMessage());
+    } catch (IllegalArgumentException | ArrayIndexOutOfBoundsException e) {
+        System.out.println("Invalid input. Ensure the parameters are station ID, start date, and end date.");
     }
+}
 
     
     public static void listReplacementOrders(int stationId, Timestamp startDate, Timestamp endDate) throws SQLException {
@@ -165,7 +165,7 @@ public class Model {
     """;
 
     try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
-         PreparedStatement pstmt = conn.prepareStatement(VALUE_CMD)) {
+        PreparedStatement pstmt = conn.prepareStatement(VALUE_CMD)) {
 
         // Modifying the parameters
         pstmt.setInt(1, stationId);
@@ -366,7 +366,7 @@ public class Model {
         //System.out.print("EMPTY")
     }
 
-    public static void updateDocks(/*FILL WITH PARAMETERS */) {
+    public static void updateDocks( query, dockNumber, stationId, state, scooterId) {
         System.out.println("updateDocks()");
         try {
             String dockDetails = Model.inputData("Enter dock details (dock number, station ID, state, scooter ID):\n");
@@ -375,15 +375,33 @@ public class Model {
             int stationId = Integer.parseInt(details[1]);
             String state = details[2];
             Integer scooterId = details.length > 3 ? Integer.parseInt(details[3]) : null;
-        
+    
             String query = "UPDATE DOCK SET state = ?, scooter = ? WHERE number = ? AND station = ?";
-            Model.executeUpdate(query, state, scooterId, dockNumber, stationId);
-            System.out.println("Dock updated successfully.");
+    
+            try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
+                PreparedStatement pstmt = conn.prepareStatement(query)) {
+    
+                pstmt.setString(1, state);
+                if (scooterId != null) {
+                    pstmt.setInt(2, scooterId);
+                } else {
+                    pstmt.setNull(2, Types.INTEGER);
+                }
+                pstmt.setInt(3, dockNumber);
+                pstmt.setInt(4, stationId);
+    
+                int rowsUpdated = pstmt.executeUpdate();
+                if (rowsUpdated == 0) {
+                    throw new SQLException("No dock found with the specified details.");
+                }
+    
+                System.out.println("Dock updated successfully.");
+            }
         } catch (Exception ex) {
             ex.printStackTrace();
             System.out.println("Error updating dock.");
         }
-    }        
+    }
 
 
     public static void userSatisfaction(/*FILL WITH PARAMETERS */){
@@ -396,8 +414,17 @@ public class Model {
             String comments = details.length > 2 ? details[2] : "";
     
             String query = "INSERT INTO user_satisfaction (user_id, rating, comments) VALUES (?, ?, ?)";
-            Model.executeUpdate(query, userId, rating, comments);
-            System.out.println("User satisfaction recorded successfully.");
+    
+            try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
+                PreparedStatement pstmt = conn.prepareStatement(query)) {
+    
+                pstmt.setInt(1, userId);
+                pstmt.setInt(2, rating);
+                pstmt.setString(3, comments);
+    
+                pstmt.executeUpdate();
+                System.out.println("User satisfaction recorded successfully.");
+            }
         } catch (Exception ex) {
             ex.printStackTrace();
             System.out.println("Error recording user satisfaction.");
@@ -413,8 +440,20 @@ public class Model {
             double occupationRate = Double.parseDouble(details[1]);
     
             String query = "UPDATE station SET occupation_rate = ? WHERE id = ?";
-            Model.executeUpdate(query, occupationRate, stationId);
-            System.out.println("Station occupation updated successfully.");
+    
+            try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
+                PreparedStatement pstmt = conn.prepareStatement(query)) {
+    
+                pstmt.setDouble(1, occupationRate);
+                pstmt.setInt(2, stationId);
+    
+                int rowsUpdated = pstmt.executeUpdate();
+                if (rowsUpdated == 0) {
+                    throw new SQLException("No station found with the specified ID.");
+                }
+    
+                System.out.println("Station occupation updated successfully.");
+            }
         } catch (Exception ex) {
             ex.printStackTrace();
             System.out.println("Error updating station occupation.");

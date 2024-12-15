@@ -119,7 +119,7 @@ public class Model {
         """;
 
         try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
-        PreparedStatement pstmt = conn.prepareStatement(QUERY/*Value_CMD??*/)) {
+        PreparedStatement pstmt = conn.prepareStatement(VALUE_CMD/*QUERY??*/)) {
 
          // Parse input parameters
         int stationId = Integer.parseInt(orders[0]);
@@ -366,17 +366,17 @@ public class Model {
         //System.out.print("EMPTY")
     }
 
-    public static void updateDocks( query, dockNumber, stationId, state, scooterId) {
+    public static void updateDocks(String query,String state, Integer scooterID, int dockNumber,int stationId) {
         System.out.println("updateDocks()");
         try {
             String dockDetails = Model.inputData("Enter dock details (dock number, station ID, state, scooter ID):\n");
             String[] details = dockDetails.split(",");
-            int dockNumber = Integer.parseInt(details[0]);
-            int stationId = Integer.parseInt(details[1]);
-            String state = details[2];
+            dockNumber = Integer.parseInt(details[0]);
+            stationId = Integer.parseInt(details[1]);
+            state = details[2];
             Integer scooterId = details.length > 3 ? Integer.parseInt(details[3]) : null;
     
-            String query = "UPDATE DOCK SET state = ?, scooter = ? WHERE number = ? AND station = ?";
+            query = "UPDATE DOCK SET state = ?, scooter = ? WHERE number = ? AND station = ?";
     
             try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
                 PreparedStatement pstmt = conn.prepareStatement(query)) {
@@ -404,16 +404,16 @@ public class Model {
     }
 
 
-    public static void userSatisfaction(/*FILL WITH PARAMETERS */){
+    public static void userSatisfaction(String query, int userId, int rating, String comments) {
         System.out.println("userSatisfaction()");
         try {
             String satisfactionDetails = Model.inputData("Enter user satisfaction details (user ID, rating, comments):\n");
             String[] details = satisfactionDetails.split(",");
-            int userId = Integer.parseInt(details[0]);
-            int rating = Integer.parseInt(details[1]);
-            String comments = details.length > 2 ? details[2] : "";
+            userId = Integer.parseInt(details[0]);
+            rating = Integer.parseInt(details[1]);
+            comments = details.length > 2 ? details[2] : "";
     
-            String query = "INSERT INTO user_satisfaction (user_id, rating, comments) VALUES (?, ?, ?)";
+            query = "INSERT INTO user_satisfaction (user_id, rating, comments) VALUES (?, ?, ?)";
     
             try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
                 PreparedStatement pstmt = conn.prepareStatement(query)) {
@@ -431,15 +431,15 @@ public class Model {
         }
     }
 
-    public static void occupationStation(/*FILL WITH PARAMETERS */){
+    public static void occupationStation(String query, double occupationRate, int stationId) {
         System.out.println("occupationStation()");
         try {
             String stationDetails = Model.inputData("Enter station occupation details (station ID, occupation rate):\n");
             String[] details = stationDetails.split(",");
-            int stationId = Integer.parseInt(details[0]);
-            double occupationRate = Double.parseDouble(details[1]);
+            stationId = Integer.parseInt(details[0]);
+            occupationRate = Double.parseDouble(details[1]);
     
-            String query = "UPDATE station SET occupation_rate = ? WHERE id = ?";
+            query = "UPDATE station SET occupation_rate = ? WHERE id = ?";
     
             try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
                 PreparedStatement pstmt = conn.prepareStatement(query)) {

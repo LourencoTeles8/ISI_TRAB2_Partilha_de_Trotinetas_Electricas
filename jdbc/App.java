@@ -257,6 +257,7 @@ class UI {
             ex.printStackTrace();
             System.out.println("Error updating station occupation.");
         }
+    }
 }
 
 public class App {
@@ -270,4 +271,3 @@ public class App {
             UI.getInstance().Run();
         }
     }
-}

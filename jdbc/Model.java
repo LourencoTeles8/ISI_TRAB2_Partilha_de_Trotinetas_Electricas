@@ -66,9 +66,9 @@ public class Model {
                 }
             }
             // Insert client
-            pstmtPerson.setInt(1, personId);
-            pstmtPerson.setTimestamp(2, userData.getRegistrationDate());
-            pstmtPerson.executeUpdate();
+            pstmtUser.setInt(1, personId); // Use pstmtUser, not pstmtPerson
+            pstmtUser.setTimestamp(2, userData.getRegistrationDate()); // Set the correct timestamp
+            pstmtUser.executeUpdate();
 
             // Insert card
             pstmtCard.setDouble(1, cardData.getCredit());
@@ -223,7 +223,7 @@ public class Model {
          * @return client ID or -1 if not found
          * @throws SQLException if database operation fails
          */
-         final String QUERY = """
+        final String QUERY = """
         SELECT c.person
         FROM client c
         JOIN person p ON c.person = p.id
@@ -231,7 +231,7 @@ public class Model {
     """;
 
     try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
-         PreparedStatement pstmt = conn.prepareStatement(QUERY)) {
+        PreparedStatement pstmt = conn.prepareStatement(QUERY)) {
 
         // Configure the query parameter
         pstmt.setString(1, name);
@@ -264,8 +264,8 @@ public class Model {
     final String INSERT_TRAVEL = "INSERT INTO travel (dtinitial, client, scooter, stinitial) VALUES (CURRENT_TIMESTAMP, ?, ?, ?)";
 
     try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
-         PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
-         PreparedStatement pstmtTravel = conn.prepareStatement(INSERT_TRAVEL)) {
+        PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
+        PreparedStatement pstmtTravel = conn.prepareStatement(INSERT_TRAVEL)) {
 
         conn.setAutoCommit(false); // Beginning of the transaction
 
@@ -312,10 +312,10 @@ public class Model {
     final String UPDATE_CARD_BALANCE = "UPDATE card SET credit = credit - ? WHERE client = ? AND credit >= ?";
 
     try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
-         PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
-         PreparedStatement pstmtTravel = conn.prepareStatement(UPDATE_TRAVEL);
-         PreparedStatement pstmtCost = conn.prepareStatement(CALCULATE_COST);
-         PreparedStatement pstmtCard = conn.prepareStatement(UPDATE_CARD_BALANCE)) {
+        PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
+        PreparedStatement pstmtTravel = conn.prepareStatement(UPDATE_TRAVEL);
+        PreparedStatement pstmtCost = conn.prepareStatement(CALCULATE_COST);
+        PreparedStatement pstmtCard = conn.prepareStatement(UPDATE_CARD_BALANCE)) {
 
         conn.setAutoCommit(false); // Beginning of the transaction
 

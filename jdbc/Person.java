@@ -16,10 +16,10 @@ public class Person {
     }
 
     public Person(String[] attr){
-       // Convert values to integer and a strings
-       this.email = validateAndGetEmail(attr); 
-       this.taxnumber = validateAndGetTaxNumber(attr);
-       this.name = validateAndGetName(attr);  
+        // Convert values to integer and a strings
+        this.email = validateAndGetEmail(attr); 
+        this.taxnumber = validateAndGetTaxNumber(attr);
+        this.name = validateAndGetName(attr);  
     }  
 
     // Getters and Setters

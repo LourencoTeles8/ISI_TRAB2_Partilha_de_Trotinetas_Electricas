@@ -249,74 +249,90 @@ public class Model {
     }
 
     public static void startTravel(int clientId, int scooterId, int stationId) throws SQLException {
-        final String UPDATE_DOCK = "UPDATE dock SET state = 'free', scooter = NULL WHERE number = ?";
-        final String INSERT_TRAVEL = "INSERT INTO travel (dtinitial, client, scooter, stinitial) VALUES (?, ?, ?, ?)";
+        final String CHECK_CREDIT = """
+            SELECT credit 
+            FROM card 
+            WHERE client = ?
+        """;
         final String CHECK_SCOOTER = """
             SELECT dock.number, dock.state 
             FROM dock 
             WHERE dock.scooter = ? AND dock.station = ?
         """;
+        final String UPDATE_DOCK = "UPDATE dock SET state = 'free', scooter = NULL WHERE number = ?";
+        final String INSERT_TRAVEL = "INSERT INTO travel (dtinitial, client, scooter, stinitial) VALUES (?, ?, ?, ?)";
     
-        // Conexão com o banco de dados
         try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
-             PreparedStatement pstmtScooter = conn.prepareStatement(CHECK_SCOOTER);
-             PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
-             PreparedStatement pstmtTravel = conn.prepareStatement(INSERT_TRAVEL)) {
+            PreparedStatement pstmtCredit = conn.prepareStatement(CHECK_CREDIT);
+            PreparedStatement pstmtScooter = conn.prepareStatement(CHECK_SCOOTER);
+            PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
+            PreparedStatement pstmtTravel = conn.prepareStatement(INSERT_TRAVEL)) {
     
-            // Iniciar transação para garantir atomicidade
-            conn.setAutoCommit(false);
+            conn.setAutoCommit(false); // Begin transaction
     
-            // Verificar a disponibilidade do scooter
-            System.out.println("Checking scooter availability... ");
-            pstmtScooter.setInt(1, scooterId);  // Parâmetro: ID do scooter
-            pstmtScooter.setInt(2, stationId);  // Parâmetro: ID da estação
-    
-            int dockId = -1; // Inicializar dockId como inválido
-            try (ResultSet rs = pstmtScooter.executeQuery()) {
-                if (rs.next()) {
-                    // Obter informações do dock
-                    dockId = rs.getInt("number");
-                    String dockState = rs.getString("state");
-                    System.out.println("Dock found: ID = " + dockId + ", State = " + dockState);
-    
-                    // Verificar se o dock está ocupado
-                    if (!"occupy".equalsIgnoreCase(dockState)) {
-                        throw new SQLException("Scooter not available for travel. Current state: " + dockState);
+            // Step 1: Check user credit
+            System.out.println("Checking user credit...");
+            pstmtCredit.setInt(1, clientId);
+            double userCredit;
+            try (ResultSet rsCredit = pstmtCredit.executeQuery()) {
+                if (rsCredit.next()) {
+                    userCredit = rsCredit.getDouble("credit");
+                    System.out.println("User credit: " + userCredit);
+                    if (userCredit < 1.0) {
+                        throw new SQLException("Insufficient credit. The user needs at least 1 unit to start a travel.");
                     }
                 } else {
-                    // Scooter não encontrado na estação especificada
-                    throw new SQLException("No scooter found at the specified station with ID: " + scooterId);
+                    throw new SQLException("No card found for the specified client ID: " + clientId);
                 }
             }
     
-            // Liberar o dock associado ao scooter
+            // Step 2: Check scooter availability in the dock
+            System.out.println("Checking scooter availability...");
+            pstmtScooter.setInt(1, scooterId);
+            pstmtScooter.setInt(2, stationId);
+    
+            int dockId = -1; // Initialize dockId as invalid
+            try (ResultSet rsScooter = pstmtScooter.executeQuery()) {
+                if (rsScooter.next()) {
+                    dockId = rsScooter.getInt("number");
+                    String dockState = rsScooter.getString("state");
+                    System.out.println("Dock found: ID = " + dockId + ", State = " + dockState);
+    
+                    if (!"occupy".equalsIgnoreCase(dockState)) {
+                        throw new SQLException("Scooter not available for travel. Current dock state: " + dockState);
+                    }
+                } else {
+                    throw new SQLException("No scooter found at the specified station.");
+                }
+            }
+    
+            // Step 3: Free the dock associated with the scooter
             System.out.println("Freeing up dock with ID: " + dockId);
-            pstmtDock.setInt(1, dockId); // Parâmetro: ID do dock
+            pstmtDock.setInt(1, dockId);
             int rowsUpdated = pstmtDock.executeUpdate();
             if (rowsUpdated == 0) {
                 throw new SQLException("Failed to update dock. Dock ID: " + dockId);
             }
     
-            // Inserir novo registro de viagem
-            System.out.println("Inserting new travel record for Client ID: " + clientId + ", Scooter ID: " + scooterId);
-            pstmtTravel.setTimestamp(1, new Timestamp(System.currentTimeMillis())); // Data e hora atuais
-            pstmtTravel.setInt(2, clientId);  // ID do cliente
-            pstmtTravel.setInt(3, scooterId); // ID do scooter
-            pstmtTravel.setInt(4, stationId); // ID da estação inicial
-    
+            // Step 4: Insert the travel record
+            System.out.println("Inserting new travel record...");
+            pstmtTravel.setTimestamp(1, new Timestamp(System.currentTimeMillis()));
+            pstmtTravel.setInt(2, clientId);
+            pstmtTravel.setInt(3, scooterId);
+            pstmtTravel.setInt(4, stationId);
             pstmtTravel.executeUpdate();
     
-            // Confirmar transação
+            // Commit transaction
             conn.commit();
             System.out.println("Travel started successfully for Client ID: " + clientId + ", Scooter ID: " + scooterId);
     
+            // Step 5: Update station occupation
+            occupationStation();
         } catch (SQLException e) {
-            // Exceção em caso de erro
-            System.out.println("Error in startTravel: " + e.getMessage());
-            e.printStackTrace();
-            throw new SQLException("Error starting travel: " + e.getMessage());
+            throw new SQLException("Error starting travel: " + e.getMessage(), e);
         }
     }
+    
     
     public class Restriction {
         public static int findFreeDock(Connection conn, int stationId) throws SQLException {
@@ -502,8 +518,8 @@ public class Model {
                 if (rowsUpdated == 0) {
                     throw new SQLException("No dock found with the specified details.");
                 }
-            }
-            catch (Exception ex) {
+                occupationStation();
+            } catch (Exception ex) {
             ex.printStackTrace();
         }
     }
@@ -540,8 +556,8 @@ public class Model {
     public static void occupationStation() throws SQLException {
         final String sql = """
             SELECT st.id AS station_id,
-                   COUNT(d.number) AS total_docks,
-                   SUM(CASE WHEN d.state = 'occupied' THEN 1 ELSE 0 END) AS occupied_docks
+            COUNT(d.number) AS total_docks,
+            SUM(CASE WHEN d.state = 'occupied' THEN 1 ELSE 0 END) AS occupied_docks
             FROM station st
             INNER JOIN dock d ON st.id = d.station
             GROUP BY st.id
@@ -550,7 +566,7 @@ public class Model {
         """;
     
         try (Connection connection = DriverManager.getConnection(UI.getInstance().getConnectionString());
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
     
             try (ResultSet resultSet = statement.executeQuery()) {
                 System.out.println("Top 3 Stations by Occupied Docks:");

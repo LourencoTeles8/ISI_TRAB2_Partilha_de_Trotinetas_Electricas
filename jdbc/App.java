@@ -188,7 +188,7 @@ class UI {
         try {
             // IMPORTANT: The values entered must be separated by a comma with no blank
             // spaces
-            String orders = Model.inputData("Enter the time interval and the station number:\n");
+            String orders = Model.inputData("Enter the station number and the time interval(Station number, start date in YYYY-MM-AA HH:MM:SS, end date should be in the same format):\n");
             Model.listOrders(orders.split(","));
         } catch (Exception ex) {
             ex.printStackTrace();

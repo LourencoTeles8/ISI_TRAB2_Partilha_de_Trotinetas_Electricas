@@ -126,10 +126,10 @@ public class Model {
         Timestamp startDate = Timestamp.valueOf(orders[1]);
         Timestamp endDate = Timestamp.valueOf(orders[2]);
 
-         // Set query parameters
-        pstmt.setTimestamp(1, startDate);
-        pstmt.setTimestamp(2, endDate);
-        pstmt.setInt(3, stationId);
+        // Set query parameters
+        pstmt.setInt(1, stationId);
+        pstmt.setTimestamp(2, startDate);
+        pstmt.setTimestamp(3, endDate);
 
             // Execute query and display results
         try (ResultSet rs = pstmt.executeQuery()) {
@@ -139,49 +139,50 @@ public class Model {
         e.printStackTrace();
         throw new RuntimeException("Error while listing orders: " + e.getMessage());
     } catch (IllegalArgumentException | ArrayIndexOutOfBoundsException e) {
-        System.out.println("Invalid input. Ensure the parameters are start date, and end date, station ID.");
+        System.out.println("Invalid input. Ensure the parameters are station ID, start date, end date.");
     }
 }
 
     
-    public static void listReplacementOrders(Timestamp startDate, Timestamp endDate, int stationId) throws SQLException {
-        /** IMPLEMENTED!
-         * Lists replacement orders for a specific station in a given time period
-         * @param stationId Station ID
-         * @param startDate Start date for period
-         * @param endDate End date for period
-         * @throws SQLException if database operation fails
-         */
-        final String VALUE_CMD = """
-        SELECT ro.dtorder, ro.dtreplacement, ro.roccupation, s.latitude, s.longitude
-        FROM replacementorder ro
-        JOIN station s ON ro.station = s.id
-        WHERE ro.station = ? AND ro.dtorder BETWEEN ? AND ?
-        ORDER BY ro.dtorder;
-    """;
+public static void listReplacementOrders(Timestamp startDate, Timestamp endDate, int stationId) throws SQLException {
+    /** IMPLEMENTED!
+     * Lists replacement orders for a specific station in a given time period
+     * @param stationId Station ID
+     * @param startDate Start date for period
+     * @param endDate End date for period
+     * @throws SQLException if database operation fails
+     */
+    final String VALUE_CMD = """
+    SELECT ro.dtorder, ro.dtreplacement, ro.roccupation, s.latitude, s.longitude
+    FROM replacementorder ro
+    JOIN station s ON ro.station = s.id
+    WHERE ro.station = ? AND ro.dtorder BETWEEN ? AND ?
+    ORDER BY ro.dtorder;
+""";
 
-    try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
-        PreparedStatement pstmt = conn.prepareStatement(VALUE_CMD)) {
+try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
+    PreparedStatement pstmt = conn.prepareStatement(VALUE_CMD)) {
 
-        // Modifying the parameters
-        pstmt.setTimestamp(1, startDate);
-        pstmt.setTimestamp(2, endDate);
-        pstmt.setInt(3, stationId);
+    // Modifying the parameters
+    pstmt.setInt(1, stationId);
+    pstmt.setTimestamp(2, startDate);
+    pstmt.setTimestamp(3, endDate);
 
-        // Run the query and get the results
-        try (ResultSet rs = pstmt.executeQuery()) {
-            if (!rs.isBeforeFirst()) { // Checks if the resultset is empty
-                System.out.println("No replacement orders found for the specified criteria.");
-            } else {
-                UI.printResults(rs); // Format and display the results
-            }
+
+    // Run the query and get the results
+    try (ResultSet rs = pstmt.executeQuery()) {
+        if (!rs.isBeforeFirst()) { // Checks if the resultset is empty
+            System.out.println("No replacement orders found for the specified criteria.");
+        } else {
+            UI.printResults(rs); // Format and display the results
         }
-    } catch (SQLException e) {
-        e.printStackTrace();
-        throw new RuntimeException("Error while listing replacement orders: " + e.getMessage());
     }
-        System.out.print("EMPTY");
-    }
+} catch (SQLException e) {
+    e.printStackTrace();
+    throw new RuntimeException("Error while listing replacement orders: " + e.getMessage());
+}
+    System.out.print("EMPTY");
+}
 
     public static void travel(String[] values){
         /**
@@ -561,7 +562,7 @@ public class Model {
         final String sql = """
             SELECT st.id AS station_id,
             COUNT(d.number) AS total_docks,
-            SUM(CASE WHEN d.state = 'occupied' THEN 1 ELSE 0 END) AS occupied_docks
+            SUM(CASE WHEN d.state = 'occupy' THEN 1 ELSE 0 END) AS occupied_docks
             FROM station st
             INNER JOIN dock d ON st.id = d.station
             GROUP BY st.id

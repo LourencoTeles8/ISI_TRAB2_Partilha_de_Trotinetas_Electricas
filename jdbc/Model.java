@@ -252,97 +252,121 @@ public class Model {
         final String UPDATE_DOCK = "UPDATE dock SET state = 'free', scooter = NULL WHERE number = ?";
         final String INSERT_TRAVEL = "INSERT INTO travel (dtinitial, client, scooter, stinitial) VALUES (?, ?, ?, ?)";
         final String CHECK_SCOOTER = """
-                    SELECT dock.number, dock.state 
-                    FROM dock 
-                    WHERE dock.scooter = ? AND dock.station = ?
-                """;
+            SELECT dock.number, dock.state 
+            FROM dock 
+            WHERE dock.scooter = ? AND dock.station = ?
+        """;
     
+        // Conexão com o banco de dados
         try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
              PreparedStatement pstmtScooter = conn.prepareStatement(CHECK_SCOOTER);
              PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
              PreparedStatement pstmtTravel = conn.prepareStatement(INSERT_TRAVEL)) {
     
+            // Iniciar transação para garantir atomicidade
             conn.setAutoCommit(false);
-            System.out.println("Checking scooter availability... ");
-            pstmtScooter.setInt(1, scooterId);
-            pstmtScooter.setInt(2, stationId);
     
-            int dockId = -1;
+            // Verificar a disponibilidade do scooter
+            System.out.println("Checking scooter availability... ");
+            pstmtScooter.setInt(1, scooterId);  // Parâmetro: ID do scooter
+            pstmtScooter.setInt(2, stationId);  // Parâmetro: ID da estação
+    
+            int dockId = -1; // Inicializar dockId como inválido
             try (ResultSet rs = pstmtScooter.executeQuery()) {
                 if (rs.next()) {
+                    // Obter informações do dock
                     dockId = rs.getInt("number");
                     String dockState = rs.getString("state");
                     System.out.println("Dock found: ID = " + dockId + ", State = " + dockState);
     
+                    // Verificar se o dock está ocupado
                     if (!"occupy".equalsIgnoreCase(dockState)) {
                         throw new SQLException("Scooter not available for travel. Current state: " + dockState);
                     }
                 } else {
+                    // Scooter não encontrado na estação especificada
                     throw new SQLException("No scooter found at the specified station with ID: " + scooterId);
                 }
             }
+    
+            // Liberar o dock associado ao scooter
             System.out.println("Freeing up dock with ID: " + dockId);
-            pstmtDock.setInt(1, dockId);
+            pstmtDock.setInt(1, dockId); // Parâmetro: ID do dock
             int rowsUpdated = pstmtDock.executeUpdate();
             if (rowsUpdated == 0) {
                 throw new SQLException("Failed to update dock. Dock ID: " + dockId);
             }
     
+            // Inserir novo registro de viagem
             System.out.println("Inserting new travel record for Client ID: " + clientId + ", Scooter ID: " + scooterId);
-            pstmtTravel.setTimestamp(1, new Timestamp(System.currentTimeMillis())); // Current timestamp
-            pstmtTravel.setInt(2, clientId);
-            pstmtTravel.setInt(3, scooterId);
-            pstmtTravel.setInt(4, stationId);
+            pstmtTravel.setTimestamp(1, new Timestamp(System.currentTimeMillis())); // Data e hora atuais
+            pstmtTravel.setInt(2, clientId);  // ID do cliente
+            pstmtTravel.setInt(3, scooterId); // ID do scooter
+            pstmtTravel.setInt(4, stationId); // ID da estação inicial
     
             pstmtTravel.executeUpdate();
-            conn.commit();
     
+            // Confirmar transação
+            conn.commit();
             System.out.println("Travel started successfully for Client ID: " + clientId + ", Scooter ID: " + scooterId);
     
         } catch (SQLException e) {
+            // Exceção em caso de erro
             System.out.println("Error in startTravel: " + e.getMessage());
             e.printStackTrace();
             throw new SQLException("Error starting travel: " + e.getMessage());
         }
     }
     
-    
-    
-
     public class Restriction {
         public static int findFreeDock(Connection conn, int stationId) throws SQLException {
-            final String QUERY = """
-                SELECT number
-                FROM dock
-                WHERE station = ? AND state = 'free'
-                LIMIT 1
-            """;
-    
-            try (PreparedStatement stmt = conn.prepareStatement(QUERY)) {
-                stmt.setInt(1, stationId);
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        return rs.getInt("number");
-                    } else {
-                        throw new SQLException("No free docks available at the station.");
-                    }
+           // Consulta SQL para encontrar o primeiro dock livre em uma estação específica
+        final String QUERY = """
+            SELECT number
+            FROM dock
+            WHERE station = ? AND state = 'free'
+            LIMIT 1
+        """;
+
+        // Usar try-with-resources para garantir que o PreparedStatement seja fechado automaticamente
+        try (PreparedStatement stmt = conn.prepareStatement(QUERY)) {
+            // Configurar o parâmetro da consulta (ID da estação)
+            stmt.setInt(1, stationId);
+
+            // Executar a consulta e obter os resultados
+            try (ResultSet rs = stmt.executeQuery()) {
+                // Verificar se há algum dock disponível
+                if (rs.next()) {
+                    // Retornar o número do dock livre
+                    return rs.getInt("number");
+                } else {
+                    // Lançar uma exceção caso nenhum dock esteja disponível
+                    throw new SQLException("No free docks available at the station.");
                 }
             }
         }
     }
+    }
     
     public static void stopTravel(int clientId, int scooterId, int stationId) throws SQLException {
+        // Query para atualizar a tabela `travel` com a data final da viagem (dtfinal) e a estação final (stfinal)
         final String UPDATE_TRAVEL = """
             UPDATE travel 
             SET dtfinal = ?, stfinal = ? 
             WHERE client = ? AND scooter = ? AND dtfinal IS NULL
         """;
+    
+        // Query para atualizar a tabela `dock`, alterando o estado para "occupy" e associando o scooter ao dock
         final String UPDATE_DOCK = "UPDATE dock SET state = 'occupy', scooter = ? WHERE number = ?";
+    
+        // Query para deduzir o crédito do cliente pelo custo da viagem
         final String UPDATE_CREDIT = """
             UPDATE card 
             SET credit = GREATEST(credit - ?, 0) 
             WHERE client = ?
         """;
+    
+        // Query para calcular a duração da viagem com base nos timestamps iniciais e finais
         final String CALCULATE_DURATION = """
             SELECT dtinitial, dtfinal
             FROM (
@@ -352,6 +376,8 @@ public class Model {
             ) subquery
             WHERE subquery.row_num = 1
         """;
+    
+        // Query para adicionar uma avaliação e comentário à viagem
         final String ADD_REVIEW = """
             UPDATE travel
             SET evaluation = ?, comment = ?
@@ -373,38 +399,43 @@ public class Model {
              PreparedStatement pstmtUpdateCredit = conn.prepareStatement(UPDATE_CREDIT);
              PreparedStatement pstmtAddReview = conn.prepareStatement(ADD_REVIEW)) {
     
+            // Inicia uma transação
             conn.setAutoCommit(false);
     
-            pstmtUpdateTravel.setTimestamp(1, new Timestamp(System.currentTimeMillis()));
-            pstmtUpdateTravel.setInt(2, stationId);
-            pstmtUpdateTravel.setInt(3, clientId);
-            pstmtUpdateTravel.setInt(4, scooterId);
+            // Atualiza o registro da viagem com o horário de término e estação final
+            pstmtUpdateTravel.setTimestamp(1, new Timestamp(System.currentTimeMillis())); // Hora atual como dtfinal
+            pstmtUpdateTravel.setInt(2, stationId); // Estação final
+            pstmtUpdateTravel.setInt(3, clientId); // ID do cliente
+            pstmtUpdateTravel.setInt(4, scooterId); // ID do scooter
     
             if (pstmtUpdateTravel.executeUpdate() == 0) {
                 throw new SQLException("No active travel found for the given client and scooter.");
             }
     
+            // Encontra um dock livre na estação de destino
             int dockNumber = Restriction.findFreeDock(conn, stationId);
     
+            // Atualiza o estado do dock para "occupy" e associa o scooter
             pstmtUpdateDock.setInt(1, scooterId);
             pstmtUpdateDock.setInt(2, dockNumber);
             pstmtUpdateDock.executeUpdate();
     
-            double totalCost = 0.0;
+            double totalCost = 0.0; // Inicializa o custo total
             pstmtCalculateDuration.setInt(1, clientId);
             pstmtCalculateDuration.setInt(2, scooterId);
     
+            // Calcula a duração da viagem e o custo total
             try (ResultSet rs = pstmtCalculateDuration.executeQuery()) {
                 if (rs.next()) {
                     Timestamp dtInitial = rs.getTimestamp("dtinitial");
                     Timestamp dtFinal = new Timestamp(System.currentTimeMillis());
     
-                    long durationInMinutes = (dtFinal.getTime() - dtInitial.getTime()) / (60 * 1000);
+                    long durationInMinutes = (dtFinal.getTime() - dtInitial.getTime()) / (60 * 1000); // Duração em minutos
                     if (durationInMinutes < 0) {
                         throw new SQLException("Invalid travel duration. Please check travel timestamps.");
                     }
     
-                    totalCost = 1 + (durationInMinutes * 0.15);
+                    totalCost = 1 + (durationInMinutes * 0.15); // Custo fixo + custo por minuto
                     System.out.println("Travel duration: " + durationInMinutes + " minutes.");
                     System.out.println("Total cost: " + totalCost + " euros.");
                 } else {
@@ -412,6 +443,7 @@ public class Model {
                 }
             }
     
+            // Deduz o custo da viagem do crédito do cliente
             pstmtUpdateCredit.setDouble(1, totalCost);
             pstmtUpdateCredit.setInt(2, clientId);
     
@@ -420,13 +452,15 @@ public class Model {
                 throw new SQLException("Insufficient credit to deduct travel cost.");
             }
     
+            // Solicita uma avaliação do cliente
             Scanner scanner = new Scanner(System.in);
             System.out.print("Rate your travel experience from 1 to 5: ");
             int rating = scanner.nextInt();
-            scanner.nextLine();
+            scanner.nextLine(); // Consumir a nova linha
             System.out.print("Insert a comment based of your experience: ");
             String comment = scanner.nextLine();
     
+            // Adiciona a avaliação e o comentário ao registro da viagem
             pstmtAddReview.setInt(1, rating);
             pstmtAddReview.setString(2, comment);
             pstmtAddReview.setInt(3, clientId);
@@ -434,6 +468,7 @@ public class Model {
     
             pstmtAddReview.executeUpdate();
     
+            // Confirma a transação
             conn.commit();
             System.out.println("Travel stopped successfully. Total cost: " + totalCost + " euros.");
             System.out.println("Thank you for your review!");

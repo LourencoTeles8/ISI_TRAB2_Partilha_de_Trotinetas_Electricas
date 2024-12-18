@@ -262,15 +262,16 @@ public class Model {
         final String UPDATE_DOCK = "UPDATE dock SET state = 'free', scooter = NULL WHERE number = ?";
         final String INSERT_TRAVEL = "INSERT INTO travel (dtinitial, client, scooter, stinitial) VALUES (?, ?, ?, ?)";
     
+        // Conexão com o banco de dados
         try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
             PreparedStatement pstmtCredit = conn.prepareStatement(CHECK_CREDIT);
             PreparedStatement pstmtScooter = conn.prepareStatement(CHECK_SCOOTER);
             PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
             PreparedStatement pstmtTravel = conn.prepareStatement(INSERT_TRAVEL)) {
     
-            conn.setAutoCommit(false); // Begin transaction
+            conn.setAutoCommit(false); // Iniciar transação para garantir atomicidade
     
-            // Step 1: Check user credit
+            //Verificar o crédito do utilizador
             System.out.println("Checking user credit...");
             pstmtCredit.setInt(1, clientId);
             double userCredit;
@@ -286,7 +287,7 @@ public class Model {
                 }
             }
     
-            // Step 2: Check scooter availability in the dock
+            // Verificar a disponibilidade do scooter
             System.out.println("Checking scooter availability...");
             pstmtScooter.setInt(1, scooterId);
             pstmtScooter.setInt(2, stationId);
@@ -306,7 +307,7 @@ public class Model {
                 }
             }
     
-            // Step 3: Free the dock associated with the scooter
+            // Liberar o dock associado ao scooter
             System.out.println("Freeing up dock with ID: " + dockId);
             pstmtDock.setInt(1, dockId);
             int rowsUpdated = pstmtDock.executeUpdate();
@@ -314,7 +315,7 @@ public class Model {
                 throw new SQLException("Failed to update dock. Dock ID: " + dockId);
             }
     
-            // Step 4: Insert the travel record
+            // Inserir novo registro de viagem
             System.out.println("Inserting new travel record...");
             pstmtTravel.setTimestamp(1, new Timestamp(System.currentTimeMillis()));
             pstmtTravel.setInt(2, clientId);
@@ -322,14 +323,17 @@ public class Model {
             pstmtTravel.setInt(4, stationId);
             pstmtTravel.executeUpdate();
     
-            // Commit transaction
+            // Confirmar transação
             conn.commit();
             System.out.println("Travel started successfully for Client ID: " + clientId + ", Scooter ID: " + scooterId);
     
             // Step 5: Update station occupation
             occupationStation();
+            // Exceção em caso de erro
         } catch (SQLException e) {
-            throw new SQLException("Error starting travel: " + e.getMessage(), e);
+            System.out.println("Error in startTravel: " + e.getMessage());
+            e.printStackTrace();
+            throw new SQLException("Error starting travel: " + e.getMessage());
         }
     }
     

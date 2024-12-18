@@ -13,7 +13,7 @@ import java.util.Properties;
  * @version 1.0
  * @since 2024-11-01
  */
-public class DatabaseProperties {
+public class DataBaseProperties {
     /**
      * Properties object to store the database configuration.
      * Initialized as a static field to ensure single instance across the
@@ -24,7 +24,7 @@ public class DatabaseProperties {
     /**
      * Private constructor to prevent instantiation of this utility class.
      */
-    private DatabaseProperties() {
+    private DataBaseProperties() {
         // Prevent instantiation
     }
 

@@ -132,32 +132,35 @@ class UI {
 
     static void printResults(ResultSet dr) throws SQLException {
         ResultSetMetaData smd = dr.getMetaData();
-        for (int i = 1; i <= smd.getColumnCount(); i++)
-            System.out.format("%-15s", smd.getColumnLabel(i));
-        // Horizontal line, be carefully with line size
-        StringBuffer sep = new StringBuffer("\n");
-        for (int j = 0; j < 2 * (smd.getColumnCount() + TAB_SIZE); j++)
-            sep.append('-');
-        System.out.println(sep);
-        // Print results
-        try {
-            while (dr.next()) {
-                for (int i = 1; i <= smd.getColumnCount(); i++)
-                    System.out.format("%-15s", dr.getObject(i));
-                System.out.println();
-            }
-        } catch (SQLException e) {
-            System.out.println("Invalid arguments: " + e.getMessage());
+        int columnCount = smd.getColumnCount();
+
+        // Calculate column widths dynamically in one pass
+        int[] columnWidths = new int[columnCount];
+        for (int i = 1; i <= columnCount; i++) {
+            columnWidths[i - 1] = Math.max(smd.getColumnLabel(i).length(), TAB_SIZE); // Default minimum width
         }
-        // TODO
-        /*
-         * Result must be similar like:
-         * ListDepartment()
-         * dname dnumber mgrssn mgrstartdate
-         * -----------------------------------------------------
-         * Research 5 333445555 1988-05-22
-         * Administration 4 987654321 1995-01-01
-         */
+
+        // Print column labels
+        for (int i = 1; i <= columnCount; i++) {
+            System.out.format("%-" + columnWidths[i - 1] + "s", smd.getColumnLabel(i));
+        }
+        System.out.println();
+
+        // Print horizontal separator
+        for (int width : columnWidths) {
+            System.out.print("-".repeat(width));
+            System.out.print(" "); // Space between columns
+        }
+        System.out.println();
+
+        // Print rows
+        while (dr.next()) {
+            for (int i = 1; i <= columnCount; i++) {
+                Object value = dr.getObject(i);
+                System.out.format("%-" + columnWidths[i - 1] + "s", value == null ? "NULL" : value.toString());
+            }
+            System.out.println();
+        }
     }
 
     private void novelUser() {
@@ -192,31 +195,61 @@ class UI {
         }
     }
 
-    private void startStopTravel()  {
-        System.out.println("startStopTravel()");
+    private void startStopTravel() {
+        System.out.println("Starting startStopTravel() operation...");
+    
         try {
+            // Request user input
             String travelDetails = Model.inputData("Enter travel details (operation, client ID, station ID, scooter ID):\n");
             String[] details = travelDetails.split(",");
-            Model.travel(details);
-            System.out.println("Travel operation completed successfully.");
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            System.out.println("Error processing travel operation.");
+    
+            // Input Validation
+            if (details.length != 4) {
+                throw new IllegalArgumentException("Invalid input format. Expected: operation, client ID, station ID, scooter ID");
+            }
+    
+            // Parse input
+            String operation = details[0].trim().toLowerCase();
+            int clientId = Integer.parseInt(details[1].trim());
+            int stationId = Integer.parseInt(details[2].trim());
+            int scooterId = Integer.parseInt(details[3].trim());
+    
+            // Process travel operation based on user input
+            if ("start".equals(operation)) {
+                Model.startTravel(clientId, scooterId, stationId);
+                System.out.println("Travel successfully started for Client ID: " + clientId + ", Scooter ID: " + scooterId);
+            } else if ("stop".equals(operation)) {
+                Model.stopTravel(clientId, scooterId, stationId);
+                System.out.println("Travel successfully stopped for Client ID: " + clientId + ", Scooter ID: " + scooterId);
+            } else {
+                throw new IllegalArgumentException("Invalid operation. Please enter 'start' or 'stop'.");
+            }
+    
+        } catch (NumberFormatException e) {
+            System.out.println("Error: Please ensure Client ID, Station ID, and Scooter ID are valid integers.");
+        } catch (IllegalArgumentException e) {
+            System.out.println("Input Error: " + e.getMessage());
+        } catch (SQLException e) {
+            System.out.println("Database Error: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("Unexpected Error: " + e.getMessage());
+            e.printStackTrace();
         }
     }
+    
 
     private void updateDocks() {
         System.out.println("updateDocks()");
         try {
-            String dockDetails = Model.inputData("Enter dock details (dock number, station ID, state, scooter ID):\n");
+            String dockDetails = Model.inputData("Enter dock details (dock number, station ID, state):\n");
             String[] details = dockDetails.split(",");
             int dockNumber = Integer.parseInt(details[0]);
             int stationId = Integer.parseInt(details[1]);
             String state = details[2];
-            Integer scooterId = details.length > 3 ? Integer.parseInt(details[3]) : null;
     
-            String query = "UPDATE DOCK SET state = ?, scooter = ? WHERE number = ? AND station = ?";
-            Model.updateDocks(query, state, scooterId, dockNumber, stationId);
+            String query = "UPDATE DOCK SET state = ? WHERE number = ? AND station = ?";
+            Model.updateDocks(query, state, dockNumber, stationId);
             System.out.println("Dock updated successfully.");
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -227,35 +260,18 @@ class UI {
     private void userSatisfaction() {
             System.out.println("userSatisfaction()");
             try {
-                String satisfactionDetails = Model.inputData("Enter user satisfaction details (user ID, rating, comments):\n");
-                String[] details = satisfactionDetails.split(",");
-                int userId = Integer.parseInt(details[0]);
-                int rating = Integer.parseInt(details[1]);
-                String comments = details.length > 2 ? details[2] : "";
-        
-                String query = "INSERT INTO user_satisfaction (user_id, rating, comments) VALUES (?, ?, ?)";
-                Model.userSatisfaction(query, userId, rating, comments);
-                System.out.println("User satisfaction recorded successfully.");
+                Model.userSatisfaction();
             } catch (Exception ex) {
                 ex.printStackTrace();
-                System.out.println("Error recording user satisfaction.");
             }
     }
 
     private void occupationStation() {
         System.out.println("occupationStation()");
         try {
-            String stationDetails = Model.inputData("Enter station occupation details (station ID, occupation rate):\n");
-            String[] details = stationDetails.split(",");
-            int stationId = Integer.parseInt(details[0]);
-            double occupationRate = Double.parseDouble(details[1]);
-    
-            String query = "UPDATE station SET occupation_rate = ? WHERE id = ?";
-            Model.occupationStation(query, occupationRate, stationId);
-            System.out.println("Station occupation updated successfully.");
+            Model.occupationStation();
         } catch (Exception ex) {
             ex.printStackTrace();
-            System.out.println("Error updating station occupation.");
         }
     }
 }
@@ -263,9 +279,9 @@ class UI {
 public class App {
 
     public static void main(String[] args) throws Exception {
-        DatabaseProperties.load();
-        String url = String.format("%s?user=%s&password=%s&ssl=false", DatabaseProperties.getUrl(),
-                DatabaseProperties.getUser(), DatabaseProperties.getPassword());
+        DataBaseProperties.load();
+        String url = String.format("%s?user=%s&password=%s&ssl=false", DataBaseProperties.getUrl(),
+                DataBaseProperties.getUser(), DataBaseProperties.getPassword());
 
             UI.getInstance().setConnectionString(url);
             UI.getInstance().Run();

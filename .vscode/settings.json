@@ -1,0 +1,8 @@
+{
+    "java.project.sourcePaths": [
+        "."
+    ],
+    "java.project.referencedLibraries": [
+        "c:\\Users\\DESKTOP-5M43FE2\\Documents\\GitHub\\ISI_TRAB2_Partilha_de_Trotinetas_Electricas\\lib\\postgresql-42.7.4.jar"
+    ]
+}

@@ -262,21 +262,18 @@ public class Model {
              PreparedStatement pstmtDock = conn.prepareStatement(UPDATE_DOCK);
              PreparedStatement pstmtTravel = conn.prepareStatement(INSERT_TRAVEL)) {
     
-            conn.setAutoCommit(false); // Begin transaction
-    
-            // Step 1: Check if the scooter exists and is available at the station
+            conn.setAutoCommit(false);
             System.out.println("Checking scooter availability... ");
             pstmtScooter.setInt(1, scooterId);
             pstmtScooter.setInt(2, stationId);
     
-            int dockId = -1; // Default dock ID
+            int dockId = -1;
             try (ResultSet rs = pstmtScooter.executeQuery()) {
                 if (rs.next()) {
                     dockId = rs.getInt("number");
                     String dockState = rs.getString("state");
                     System.out.println("Dock found: ID = " + dockId + ", State = " + dockState);
     
-                    // Adjusted condition to match 'occupy' as the valid state
                     if (!"occupy".equalsIgnoreCase(dockState)) {
                         throw new SQLException("Scooter not available for travel. Current state: " + dockState);
                     }
@@ -284,8 +281,6 @@ public class Model {
                     throw new SQLException("No scooter found at the specified station with ID: " + scooterId);
                 }
             }
-    
-            // Step 2: Update the dock to free the scooter
             System.out.println("Freeing up dock with ID: " + dockId);
             pstmtDock.setInt(1, dockId);
             int rowsUpdated = pstmtDock.executeUpdate();
@@ -293,7 +288,6 @@ public class Model {
                 throw new SQLException("Failed to update dock. Dock ID: " + dockId);
             }
     
-            // Step 3: Insert a new travel record
             System.out.println("Inserting new travel record for Client ID: " + clientId + ", Scooter ID: " + scooterId);
             pstmtTravel.setTimestamp(1, new Timestamp(System.currentTimeMillis())); // Current timestamp
             pstmtTravel.setInt(2, clientId);
@@ -301,7 +295,7 @@ public class Model {
             pstmtTravel.setInt(4, stationId);
     
             pstmtTravel.executeUpdate();
-            conn.commit(); // Commit the transaction
+            conn.commit();
     
             System.out.println("Travel started successfully for Client ID: " + clientId + ", Scooter ID: " + scooterId);
     
@@ -337,83 +331,117 @@ public class Model {
         }
     }
     
-    
-
-    
     public static void stopTravel(int clientId, int scooterId, int stationId) throws SQLException {
         final String UPDATE_TRAVEL = """
             UPDATE travel 
             SET dtfinal = ?, stfinal = ? 
             WHERE client = ? AND scooter = ? AND dtfinal IS NULL
         """;
-        final String UPDATE_DOCK = "UPDATE dock SET state = 'occupied', scooter = ? WHERE number = ?";
+        final String UPDATE_DOCK = "UPDATE dock SET state = 'occupy', scooter = ? WHERE number = ?";
         final String UPDATE_CREDIT = """
             UPDATE card 
             SET credit = GREATEST(credit - ?, 0) 
             WHERE client = ?
         """;
-        final String GET_TRAVEL_DETAILS = """
-            SELECT dtinitial 
-            FROM travel 
-            WHERE client = ? AND scooter = ? AND dtfinal IS NULL
+        final String CALCULATE_DURATION = """
+            SELECT dtinitial, dtfinal
+            FROM (
+                SELECT dtinitial, dtfinal, ROW_NUMBER() OVER (ORDER BY dtfinal DESC) AS row_num
+                FROM travel
+                WHERE client = ? AND scooter = ? AND dtfinal IS NOT NULL
+            ) subquery
+            WHERE subquery.row_num = 1
+        """;
+        final String ADD_REVIEW = """
+            UPDATE travel
+            SET evaluation = ?, comment = ?
+            WHERE dtinitial = (
+                SELECT dtinitial
+                FROM (
+                    SELECT dtinitial, ROW_NUMBER() OVER (ORDER BY dtfinal DESC) AS row_num
+                    FROM travel
+                    WHERE client = ? AND scooter = ? AND dtfinal IS NOT NULL
+                ) subquery
+                WHERE subquery.row_num = 1
+            )
         """;
     
         try (Connection conn = DriverManager.getConnection(UI.getInstance().getConnectionString());
-             PreparedStatement updateTravelStmt = conn.prepareStatement(UPDATE_TRAVEL);
-             PreparedStatement updateDockStmt = conn.prepareStatement(UPDATE_DOCK);
-             PreparedStatement updateCreditStmt = conn.prepareStatement(UPDATE_CREDIT);
-             PreparedStatement getTravelDetailsStmt = conn.prepareStatement(GET_TRAVEL_DETAILS)) {
+             PreparedStatement pstmtUpdateTravel = conn.prepareStatement(UPDATE_TRAVEL);
+             PreparedStatement pstmtUpdateDock = conn.prepareStatement(UPDATE_DOCK);
+             PreparedStatement pstmtCalculateDuration = conn.prepareStatement(CALCULATE_DURATION);
+             PreparedStatement pstmtUpdateCredit = conn.prepareStatement(UPDATE_CREDIT);
+             PreparedStatement pstmtAddReview = conn.prepareStatement(ADD_REVIEW)) {
     
             conn.setAutoCommit(false);
     
-            // Update travel record with end details
-            Timestamp currentTime = new Timestamp(System.currentTimeMillis());
-            updateTravelStmt.setTimestamp(1, currentTime);
-            updateTravelStmt.setInt(2, stationId);
-            updateTravelStmt.setInt(3, clientId);
-            updateTravelStmt.setInt(4, scooterId);
+            pstmtUpdateTravel.setTimestamp(1, new Timestamp(System.currentTimeMillis()));
+            pstmtUpdateTravel.setInt(2, stationId);
+            pstmtUpdateTravel.setInt(3, clientId);
+            pstmtUpdateTravel.setInt(4, scooterId);
     
-            if (updateTravelStmt.executeUpdate() == 0) {
-                throw new SQLException("No active travel found for this client and scooter.");
+            if (pstmtUpdateTravel.executeUpdate() == 0) {
+                throw new SQLException("No active travel found for the given client and scooter.");
             }
     
-            // Fetch travel start time
-            Timestamp startTime;
-            getTravelDetailsStmt.setInt(1, clientId);
-            getTravelDetailsStmt.setInt(2, scooterId);
-            try (ResultSet rs = getTravelDetailsStmt.executeQuery()) {
+            int dockNumber = Restriction.findFreeDock(conn, stationId);
+    
+            pstmtUpdateDock.setInt(1, scooterId);
+            pstmtUpdateDock.setInt(2, dockNumber);
+            pstmtUpdateDock.executeUpdate();
+    
+            double totalCost = 0.0;
+            pstmtCalculateDuration.setInt(1, clientId);
+            pstmtCalculateDuration.setInt(2, scooterId);
+    
+            try (ResultSet rs = pstmtCalculateDuration.executeQuery()) {
                 if (rs.next()) {
-                    startTime = rs.getTimestamp("dtinitial");
+                    Timestamp dtInitial = rs.getTimestamp("dtinitial");
+                    Timestamp dtFinal = new Timestamp(System.currentTimeMillis());
+    
+                    long durationInMinutes = (dtFinal.getTime() - dtInitial.getTime()) / (60 * 1000);
+                    if (durationInMinutes < 0) {
+                        throw new SQLException("Invalid travel duration. Please check travel timestamps.");
+                    }
+    
+                    totalCost = 1 + (durationInMinutes * 0.15);
+                    System.out.println("Travel duration: " + durationInMinutes + " minutes.");
+                    System.out.println("Total cost: " + totalCost + " euros.");
                 } else {
-                    throw new SQLException("Travel start time not found.");
+                    throw new SQLException("Unable to calculate travel duration.");
                 }
             }
     
-            // Calculate travel cost
-            long travelDuration = (currentTime.getTime() - startTime.getTime()) / (60 * 1000);
-            double travelCost = 1 + (travelDuration * 0.15);
+            pstmtUpdateCredit.setDouble(1, totalCost);
+            pstmtUpdateCredit.setInt(2, clientId);
     
-            updateCreditStmt.setDouble(1, travelCost);
-            updateCreditStmt.setInt(2, clientId);
-            if (updateCreditStmt.executeUpdate() == 0) {
-                throw new SQLException("Failed to update credit balance.");
+            int rowsUpdated = pstmtUpdateCredit.executeUpdate();
+            if (rowsUpdated == 0) {
+                throw new SQLException("Insufficient credit to deduct travel cost.");
             }
     
-            // Find and update dock
-            int dockId = Restriction.findFreeDock(conn, stationId);
-            updateDockStmt.setInt(1, scooterId);
-            updateDockStmt.setInt(2, dockId);
-            updateDockStmt.executeUpdate();
+            Scanner scanner = new Scanner(System.in);
+            System.out.print("Rate your travel experience from 1 to 5: ");
+            int rating = scanner.nextInt();
+            scanner.nextLine();
+            System.out.print("Insert a comment based of your experience: ");
+            String comment = scanner.nextLine();
+    
+            pstmtAddReview.setInt(1, rating);
+            pstmtAddReview.setString(2, comment);
+            pstmtAddReview.setInt(3, clientId);
+            pstmtAddReview.setInt(4, scooterId);
+    
+            pstmtAddReview.executeUpdate();
     
             conn.commit();
-            System.out.println("Travel ended successfully. Total cost: " + travelCost + " euros.");
+            System.out.println("Travel stopped successfully. Total cost: " + totalCost + " euros.");
+            System.out.println("Thank you for your review!");
         } catch (SQLException e) {
-            throw new SQLException("Error ending travel: " + e.getMessage(), e);
+            throw new SQLException("Error stopping travel: " + e.getMessage(), e);
         }
     }
     
-    
-
     public static void updateDocks(String query,String state, int dockNumber,int stationId) {
         System.out.println("updateDocks()");
         query = "UPDATE DOCK SET state = ?, scooter = ? WHERE number = ? AND station = ?";
@@ -447,7 +475,6 @@ public class Model {
 
 
     public static void userSatisfaction() throws SQLException {
-        // SQL query to calculate average rating, total trips, and satisfaction percentage
         final String sql = """
             SELECT sm.designation AS model_name, 
                    AVG(t.evaluation) AS average_rating, 
@@ -461,18 +488,14 @@ public class Model {
             ORDER BY average_rating DESC
         """;
     
-        // Attempt to connect to the database and execute the query
         try (Connection connection = DriverManager.getConnection(UI.getInstance().getConnectionString());
              PreparedStatement statement = connection.prepareStatement(sql)) {
     
-            // Execute query and retrieve results
             try (ResultSet results = statement.executeQuery()) {
-                // Print results in a formatted way
                 System.out.println("Satisfaction Report:");
                 UI.printResults(results);
             }
         } catch (SQLException e) {
-            // Handle SQL errors gracefully
             System.err.println("An error occurred while fetching user satisfaction data.");
             e.printStackTrace();
         }
@@ -480,7 +503,6 @@ public class Model {
     
 
     public static void occupationStation() throws SQLException {
-        // SQL query to retrieve top 3 stations with the highest dock occupation
         final String sql = """
             SELECT st.id AS station_id,
                    COUNT(d.number) AS total_docks,
@@ -495,14 +517,11 @@ public class Model {
         try (Connection connection = DriverManager.getConnection(UI.getInstance().getConnectionString());
              PreparedStatement statement = connection.prepareStatement(sql)) {
     
-            // Execute query
             try (ResultSet resultSet = statement.executeQuery()) {
                 System.out.println("Top 3 Stations by Occupied Docks:");
-                // Format and print the results
                 UI.printResults(resultSet);
             }
         } catch (SQLException e) {
-            // Display error message and stack trace
             System.err.println("Error retrieving station occupation data.");
             e.printStackTrace();
         }
